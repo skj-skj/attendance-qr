@@ -82,6 +82,11 @@
             border-radius: 10px;
         }
 
+        #qrcode img {
+            max-width: 300px;
+            height: auto;
+        }
+
         .input-group {
             margin-bottom: 20px;
         }
@@ -309,6 +314,15 @@
             document.getElementById(`${mode}-section`).classList.add('active');
         }
 
+        function generateQRCode(data) {
+            const typeNumber = 0; // 0 = auto-detect
+            const errorCorrectionLevel = 'L';
+            const qr = qrcode(typeNumber, errorCorrectionLevel);
+            qr.addData(data);
+            qr.make();
+            return qr.createImgTag(5, 10); // cellSize=5, margin=10
+        }
+
         function createSession() {
             const className = document.getElementById('className').value;
             const teacherName = document.getElementById('teacherName').value;
@@ -335,14 +349,9 @@
                     teacherName: teacherName
                 });
 
-                QRCode.toCanvas(qrData, { width: 300, margin: 2 }, (err, canvas) => {
-                    if (err) {
-                        console.error(err);
-                        return;
-                    }
-                    document.getElementById('qrcode').innerHTML = '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>';
-                    document.getElementById('qrcode').appendChild(canvas);
-                });
+                document.getElementById('qrcode').innerHTML = 
+                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>' + 
+                    generateQRCode(qrData);
 
                 document.getElementById('sessionActive').style.display = 'block';
                 document.getElementById('createBtn').style.display = 'none';
@@ -407,11 +416,9 @@
                     teacherName: session.teacherName
                 });
 
-                QRCode.toCanvas(qrData, { width: 300, margin: 2 }, (err, canvas) => {
-                    if (err) return;
-                    document.getElementById('qrcode').innerHTML = '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>';
-                    document.getElementById('qrcode').appendChild(canvas);
-                });
+                document.getElementById('qrcode').innerHTML = 
+                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>' + 
+                    generateQRCode(qrData);
 
                 document.getElementById('sessionActive').style.display = 'block';
                 document.getElementById('createBtn').style.display = 'none';
