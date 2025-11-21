@@ -381,8 +381,11 @@
                     className: className,
                     teacherName: teacherName
                 });
+                const svgString = window.encodeQR(qrData, 'svg', { scale: 4 });
 
-                const svgElement = window.encodeQR(qrData, 'svg', { scale: 4 });
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+                const svgElement = svgDoc.documentElement;
 
                 document.getElementById('qrcode').innerHTML = 
                     '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>';
