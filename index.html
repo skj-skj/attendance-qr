@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Attendance System</title>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/qr@0.5.2/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qr@0.5.2/decode.min.js"></script> -->
     <style>
         * {
             margin: 0;
@@ -82,9 +82,11 @@
             border-radius: 10px;
         }
 
-        #qrcode img {
+        #qrcode svg {
             max-width: 300px;
             height: auto;
+            margin: 0 auto;
+            display: block;
         }
 
         .input-group {
@@ -169,10 +171,22 @@
             margin-bottom: 20px;
         }
 
-        #reader {
+        #video-container {
             margin: 20px 0;
             border-radius: 10px;
             overflow: hidden;
+            text-align: center;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 500px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+        }
+
+        #canvas {
+            display: none;
         }
 
         .success-message {
@@ -211,6 +225,15 @@
 
         .session-info strong {
             color: #667eea;
+        }
+
+        .camera-controls {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .camera-controls button {
+            margin: 0 5px;
         }
     </style>
 </head>
@@ -271,18 +294,32 @@
 
             <button onclick="startScanning()" id="scanBtn">📷 Scan QR Code</button>
 
-            <div id="reader"></div>
+            <div id="video-container" style="display: none;">
+                <video id="video" playsinline></video>
+                <canvas id="canvas"></canvas>
+                <div class="camera-controls">
+                    <button onclick="stopScanning()" style="background: #dc3545;">Stop Camera</button>
+                </div>
+            </div>
 
             <div id="studentStatus"></div>
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import encodeQR from 'https://unpkg.com/qr@latest/index.js';
+        import decodeQR from 'https://unpkg.com/qr@latest/decode.js';
+
+        // Make functions available globally
+        window.encodeQR = encodeQR;
+        window.decodeQR = decodeQR;
+
         let peer;
         let connections = [];
         let attendanceData = [];
         let currentSessionId;
-        let html5QrCode;
+        let videoStream = null;
+        let scanning = false;
 
         // Restore session on page load
         window.addEventListener('load', () => {
@@ -298,7 +335,7 @@
                     
                     // Show confirmation to restore
                     if (confirm(`Restore previous session "${session.className}"?\n\nStudents who already marked attendance: ${attendanceData.length}`)) {
-                        restoreSession(session);
+                        window.restoreSession(session);
                     } else {
                         localStorage.removeItem('teacherSession');
                     }
@@ -306,24 +343,20 @@
             }
         });
 
-        function switchMode(mode) {
+        window.switchMode = function(mode) {
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
 
             document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
             document.getElementById(`${mode}-section`).classList.add('active');
+
+            // Stop camera if switching modes
+            if (videoStream) {
+                window.stopScanning();
+            }
         }
 
-        function generateQRCode(data) {
-            const typeNumber = 0; // 0 = auto-detect
-            const errorCorrectionLevel = 'L';
-            const qr = qrcode(typeNumber, errorCorrectionLevel);
-            qr.addData(data);
-            qr.make();
-            return qr.createImgTag(5, 10); // cellSize=5, margin=10
-        }
-
-        function createSession() {
+        window.createSession = function() {
             const className = document.getElementById('className').value;
             const teacherName = document.getElementById('teacherName').value;
 
@@ -342,23 +375,25 @@
                 console.log('Teacher peer ID:', id);
                 document.getElementById('sessionId').textContent = id;
                 
-                // Generate QR Code
+                // Generate QR Code using qr package
                 const qrData = JSON.stringify({
                     sessionId: id,
                     className: className,
                     teacherName: teacherName
                 });
 
+                const svgElement = window.encodeQR(qrData, 'svg', { scale: 4 });
+
                 document.getElementById('qrcode').innerHTML = 
-                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>' + 
-                    generateQRCode(qrData);
+                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>';
+                document.getElementById('qrcode').appendChild(svgElement);
 
                 document.getElementById('sessionActive').style.display = 'block';
                 document.getElementById('createBtn').style.display = 'none';
 
                 // Save session to localStorage
-                saveSession(className, teacherName);
-                updateAttendanceDisplay();
+                window.saveSession(className, teacherName);
+                window.updateAttendanceDisplay();
             });
 
             // Handle incoming connections
@@ -380,8 +415,8 @@
                         // Send confirmation
                         conn.send({ status: 'success', message: 'Attendance marked successfully!' });
                         
-                        updateAttendanceDisplay();
-                        saveSession(className, teacherName);
+                        window.updateAttendanceDisplay();
+                        window.saveSession(className, teacherName);
                     } else {
                         conn.send({ status: 'duplicate', message: 'You have already marked attendance!' });
                     }
@@ -399,7 +434,7 @@
             });
         }
 
-        function restoreSession(session) {
+        window.restoreSession = function(session) {
             currentSessionId = session.sessionId;
             
             // Initialize PeerJS with same ID
@@ -416,13 +451,15 @@
                     teacherName: session.teacherName
                 });
 
+                const svgElement = window.encodeQR(qrData, 'svg', { scale: 4 });
+
                 document.getElementById('qrcode').innerHTML = 
-                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>' + 
-                    generateQRCode(qrData);
+                    '<p style="color: #667eea; font-weight: bold; margin-bottom: 10px;">Students scan this QR code</p>';
+                document.getElementById('qrcode').appendChild(svgElement);
 
                 document.getElementById('sessionActive').style.display = 'block';
                 document.getElementById('createBtn').style.display = 'none';
-                updateAttendanceDisplay();
+                window.updateAttendanceDisplay();
             });
 
             // Handle incoming connections
@@ -437,8 +474,8 @@
                             timestamp: new Date().toISOString()
                         });
                         conn.send({ status: 'success', message: 'Attendance marked successfully!' });
-                        updateAttendanceDisplay();
-                        saveSession(session.className, session.teacherName);
+                        window.updateAttendanceDisplay();
+                        window.saveSession(session.className, session.teacherName);
                     } else {
                         conn.send({ status: 'duplicate', message: 'You have already marked attendance!' });
                     }
@@ -446,7 +483,7 @@
             });
         }
 
-        function saveSession(className, teacherName) {
+        window.saveSession = function(className, teacherName) {
             const sessionData = {
                 sessionId: currentSessionId,
                 className: className,
@@ -457,7 +494,7 @@
             localStorage.setItem('teacherSession', JSON.stringify(sessionData));
         }
 
-        function updateAttendanceDisplay() {
+        window.updateAttendanceDisplay = function() {
             document.getElementById('studentCount').textContent = attendanceData.length;
             
             const listHtml = attendanceData.map(student => `
@@ -473,7 +510,7 @@
             document.getElementById('attendanceList').innerHTML = listHtml || '<p style="color: #999;">No students yet</p>';
         }
 
-        function exportCSV() {
+        window.exportCSV = function() {
             const className = document.getElementById('className').value;
             const csv = [
                 ['Name', 'Student ID', 'Timestamp'],
@@ -488,7 +525,7 @@
             a.click();
         }
 
-        function endSession() {
+        window.endSession = function() {
             if (confirm('Are you sure you want to end this session?')) {
                 if (peer) peer.destroy();
                 connections = [];
@@ -503,7 +540,7 @@
         }
 
         // Student Functions
-        function startScanning() {
+        window.startScanning = async function() {
             const studentName = document.getElementById('studentName').value;
             const studentId = document.getElementById('studentId').value;
 
@@ -512,22 +549,81 @@
                 return;
             }
 
-            html5QrCode = new Html5Qrcode("reader");
-            
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                (decodedText) => {
-                    html5QrCode.stop();
-                    connectToTeacher(decodedText, studentName, studentId);
-                }
-            ).catch(err => {
-                console.error('Camera error:', err);
+            try {
+                // Access camera
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                const video = document.getElementById('video');
+                const videoContainer = document.getElementById('video-container');
+                
+                video.srcObject = videoStream;
+                await video.play();
+                
+                videoContainer.style.display = 'block';
+                document.getElementById('scanBtn').disabled = true;
+                
+                scanning = true;
+                window.scanFrame(studentName, studentId);
+
+            } catch (err) {
+                console.error('Error accessing camera:', err);
                 alert('Unable to access camera. Please check permissions.');
-            });
+            }
         }
 
-        function connectToTeacher(qrData, studentName, studentId) {
+        window.stopScanning = function() {
+            scanning = false;
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            document.getElementById('video-container').style.display = 'none';
+            document.getElementById('scanBtn').disabled = false;
+        }
+
+        window.scanFrame = function(studentName, studentId) {
+            if (!scanning) return;
+
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                try {
+                    const result = window.decodeQR({
+                        width: imageData.width,
+                        height: imageData.height,
+                        data: imageData.data
+                    });
+
+                    if (result) {
+                        console.log('QR Code detected:', result);
+                        window.stopScanning();
+                        window.connectToTeacher(result, studentName, studentId);
+                        return;
+                    }
+                } catch (err) {
+                    // No QR code found - continue scanning
+                }
+            }
+
+            // Continue scanning
+            requestAnimationFrame(() => window.scanFrame(studentName, studentId));
+        }
+
+        window.connectToTeacher = function(qrData, studentName, studentId) {
             try {
                 const sessionInfo = JSON.parse(qrData);
                 
@@ -585,14 +681,20 @@
 
             } catch (err) {
                 console.error('Invalid QR code:', err);
-                alert('Invalid QR code. Please scan a valid attendance QR.');
+                document.getElementById('studentStatus').innerHTML = `
+                    <div class="error-message">
+                        <p>❌ Invalid QR code. Please scan a valid attendance QR.</p>
+                    </div>
+                `;
             }
         }
 
         // Handle page unload
         window.addEventListener('beforeunload', (e) => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
             if (peer && attendanceData.length > 0) {
-                // Session is already saved in localStorage, just inform user
                 e.preventDefault();
                 e.returnValue = '';
             }
