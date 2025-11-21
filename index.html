@@ -242,8 +242,8 @@
         <h1>📱 QR Attendance System</h1>
 
         <div class="mode-selector">
-            <button class="mode-btn active" onclick="switchMode('teacher')">👨‍🏫 Teacher</button>
-            <button class="mode-btn" onclick="switchMode('student')">👨‍🎓 Student</button>
+            <button class="mode-btn active" onclick="window.switchMode('teacher')">👨‍🏫 Teacher</button>
+            <button class="mode-btn" onclick="window.switchMode('student')">👨‍🎓 Student</button>
         </div>
 
         <!-- Teacher Section -->
@@ -258,7 +258,7 @@
                 <input type="text" id="teacherName" placeholder="e.g., Prof. John Doe">
             </div>
 
-            <button onclick="createSession()" id="createBtn">Create Attendance Session</button>
+            <button onclick="window.createSession()" id="createBtn">Create Attendance Session</button>
 
             <div id="sessionActive" style="display: none;">
                 <div class="session-info">
@@ -274,8 +274,8 @@
                 </div>
 
                 <div class="btn-group">
-                    <button onclick="exportCSV()">📥 Export CSV</button>
-                    <button onclick="endSession()" style="background: #dc3545;">End Session</button>
+                    <button onclick="window.exportCSV()">📥 Export CSV</button>
+                    <button onclick="window.endSession()" style="background: #dc3545;">End Session</button>
                 </div>
             </div>
         </div>
@@ -292,13 +292,13 @@
                 <input type="text" id="studentId" placeholder="e.g., 2021001">
             </div>
 
-            <button onclick="startScanning()" id="scanBtn">📷 Scan QR Code</button>
+            <button onclick="window.startScanning()" id="scanBtn">📷 Scan QR Code</button>
 
             <div id="video-container" style="display: none;">
                 <video id="video" playsinline></video>
                 <canvas id="canvas"></canvas>
                 <div class="camera-controls">
-                    <button onclick="stopScanning()" style="background: #dc3545;">Stop Camera</button>
+                    <button onclick="window.stopScanning()" style="background: #dc3545;">Stop Camera</button>
                 </div>
             </div>
 
