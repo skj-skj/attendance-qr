@@ -515,6 +515,7 @@
 
         window.exportCSV = function() {
             const className = document.getElementById('className').value;
+            const teacherName = document.getElementById('teacherName').value;
             const csv = [
                 ['Name', 'Student ID', 'Timestamp'],
                 ...attendanceData.map(s => [s.studentName, s.studentId, s.timestamp])
@@ -524,7 +525,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${className.replace(/\s/g, '_')}_attendance_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `${className.replace(/\s/g, '_')}-${teacherName.replace(/\s/g, '_')}_attendance_${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
         }
 
